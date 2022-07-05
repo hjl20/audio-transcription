@@ -7,7 +7,7 @@ Additionally, translates transcribed text to English if the original transcripti
 
 - Requires ffmpeg to convert file types.
 
-Usage in terminal/cmd: transcribe.py [path-to-file]
+Usage in terminal/cmd: transcribe.py [file]
 
 Currently supported languages: EN, JP, KR
 
