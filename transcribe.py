@@ -3,12 +3,16 @@ import os
 import speech_recognition as sr
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+from googletrans import Translator, constants
+
 
 LANGUAGES = {
     'en':'en-US',
     'jp':'ja-JP',
     'kr':'ko-KR',
 }
+
+r = sr.Recognizer()
 
 def main(argv):
     
@@ -30,56 +34,67 @@ def main(argv):
                   ''')
             print(LANGUAGES.keys())
             return
-
-    #Get audio file name and type
-    file_name = argv[1][:-4]
-    file_type = argv[1][-3:]
     
-    #Output new files into new folder
-    output_folder = 'output'
-    if not os.path.isdir(output_folder):
-        os.mkdir(output_folder)
-    os.path.join(output_folder)
+    #Output wav files into new folder
+    wav_folder = create_folder('wav-output')
+    os.path.join(wav_folder)
     
-    WAV_FILE = os.path.join(output_folder, convert_to_wav(file_type, file_name))
-    
-    r = sr.Recognizer()
+    WAV_FILE = convert_to_wav(argv[1], wav_folder)
+    WAV_FILE_PATH = os.path.join(wav_folder, WAV_FILE)
     
     #Transcribe audio
     print('Transcribing.. please wait..')
-    if (os.path.getsize(WAV_FILE) >> 20) > 10:
-        text = get_large_wav_transcript(WAV_FILE, r, language)
+    if (os.path.getsize(WAV_FILE_PATH) >> 20) > 10:
+        text = get_large_wav_transcript(WAV_FILE_PATH, language)
     else:
-        with sr.AudioFile(WAV_FILE) as source:
+        with sr.AudioFile(WAV_FILE_PATH) as source:
             audio = r.record(source)
             try:
                 text = r.recognize_google(audio, language=language)
-            except:
-                print("Error:")
-    #print(os.path.getsize(WAV_FILE) >> 20)
+            except sr.UnknownValueError as e:
+                print("Error:", str(e))
     
     #Print transcribed text
     print('Transcription:')
     print(text)
-    #TODO: Prints translated text transcription
-    if language != 'en':
+    
+    #Prints translated text transcription
+    if language != LANGUAGES['en']:
         
-        translated_text = ''
+        tl = Translator()
+        detection = tl.detect(text)
+        src_lang = detection.lang
+        translated_text = tl.translate(text, src=src_lang).text
+        
+        print(f'Translation from {constants.LANGUAGES[src_lang].capitalize()} ({detection.confidence * 100}% confidence):')
         print(translated_text)
+
+
+
+def create_folder(name):
+    output_folder = name
+    if not os.path.isdir(output_folder):
+        os.mkdir(output_folder)
+    return output_folder
     
 
 #Convert to wav
-def convert_to_wav(file_type, file_name='output'):
-    WAV_FILE = file_name + '.wav'
-    audio_input = AudioSegment.from_file(file_name + '.' + file_type, format=file_type)
-    audio_output = os.path.join('output', WAV_FILE)
+def convert_to_wav(file, wav_folder):
+    file_name = file[:-3]
+    file_type = file[-3:]
+    
+    WAV_FILE_PATH = file_name + 'wav'
+    audio_input = AudioSegment.from_file(
+        file_name + file_type,
+        format=file_type)
+    audio_output = os.path.join(wav_folder, WAV_FILE_PATH)
     audio_input.export(audio_output, format="wav")
-    return WAV_FILE
+    return WAV_FILE_PATH
 
 
-#Split up into chunks for google's speech recognition
-def get_large_wav_transcript(WAV_FILE, r, language):
-    chunks, chunk_folder = split_wav_file(AudioSegment.from_wav(WAV_FILE))
+#Split up into chunks for Google's speech recognition
+def get_large_wav_transcript(WAV_FILE_PATH, language):
+    chunks, chunk_folder = split_wav_file(WAV_FILE_PATH)
     whole_text = ''
     
     #Name and save chunk files
@@ -91,45 +106,39 @@ def get_large_wav_transcript(WAV_FILE, r, language):
         with sr.AudioFile(chunk_name) as source:
             audio = r.record(source)
             try:
-                text = r.recognize_google(audio, language)
+                text = r.recognize_google(audio, language=language)
             except sr.UnknownValueError as e:
-                print("Error on {0}:".format(i))
+                print(f'Error on {i}:', str(e))
             else:
+                print(chunk_name, ":", text)
                 whole_text += text
                 
-        #Append chunk texts together
+        #Append text chunks together
         whole_text += ' '
 
-    #Clean up folder for next use
+    #Clear folder for next use
     remove_files_from(chunk_folder)
     return whole_text
 
    
 #Split large file into chunks based on silence
-def split_wav_file(WAV_FILE, min_silence_len=500, keep_silence=500):
-    chunks = split_on_silence(WAV_FILE, 
+def split_wav_file(WAV_FILE_PATH, min_silence_len=500, keep_silence=500):
+    audio = AudioSegment.from_wav(WAV_FILE_PATH)
+    chunks = split_on_silence(audio, 
                               min_silence_len=min_silence_len,
-                              silence_thresh=WAV_FILE.dBFS-16,
+                              silence_thresh=audio.dBFS-16,
                               keep_silence=keep_silence)
     
     #Make folder for chunks
-    folder_name = 'audio-chunks'
-    if not os.path.isdir(folder_name):
-        os.mkdir(folder_name)
-    return chunks, folder_name
+    chunks_folder = create_folder('audio-chunks')
+    return chunks, chunks_folder
 
 
 def remove_files_from(folder):
     for file in os.listdir(folder):
         os.remove(os.path.join(folder, file))
-        
 
-#Get list of audio devices
-#For future use (maybe)
-def list_audio_devices():
-    for index, name in enumerate(sr.Microphone.list_microphone_names()):
-        print("{0} {1}".format(index, name))
      
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main(sys.argv)
