@@ -6,4 +6,8 @@ Automatically translates transcribed text to English if the original transcripti
 
 Libraries: speech_recognition, pydub, googletrans
 
+Currently supported languages: EN, JP, KR
+
+Expects input files to be in same directory as the script file.
+
 Requires ffmpeg to convert file types.
