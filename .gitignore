@@ -1,5 +1,7 @@
-output
 ffmpeg
+audio-chunks
+wav-output
 *.mp4
 *.mov
 *.m4a
+*.wav
